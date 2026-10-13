@@ -1,0 +1,29 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocuCraft Dashboard</title>
+</head>
+<body>
+    <h1>Welcome to DocuCraft</h1>
+    <p>Your document workspace is ready.</p>
+
+    <nav>
+        <ul>
+            <li><a href="/rewrite/">Rewrite Documents</a></li>
+            <li><a href="/images/">Image Tools</a></li>
+            <li><a href="/split/">Split Documents</a></li>
+            <li><a href="/convert/">Convert Documents</a></li>
+            <li><a href="/history/">Document History</a></li>
+        </ul>
+    </nav>
+
+    <form method="post" action="/accounts/logout/">
+        {% csrf_token %}
+        <button type="submit">Log Out</button>
+    </form>
+</body>
+</html>
+```
