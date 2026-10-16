@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block body %}
+<main class="auth">
+  <div class="auth-sheet">
+    <a class="brand" href="{% url 'accounts:login' %}">{% include "partials/mark.html" %}<span class="brand-name">DocuCraft</span></a>
+    {% include "partials/messages.html" %}
+    <div class="sheet">{% block auth %}{% endblock %}</div>
+    {% block switch %}{% endblock %}
+  </div>
+</main>
+{% endblock %}

@@ -1,0 +1,112 @@
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}{{ doc.original_filename }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="crumb"><a href="{% url 'documents:workspace' %}">Documents</a></div>
+    <h1 class="doc-name">{{ doc.original_filename }}</h1>
+    <p>Working version: <strong>version {{ current.version_number }}</strong> ({{ current.get_operation_display|lower }}, {{ current.file_type|upper }}).</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'documents:download_version' current.pk %}">Download working version</a>
+  </div>
+</div>
+
+{% if doc.error_message and doc.status != "ready" %}<div class="notice notice--error"><p>{{ doc.error_message }}</p></div>{% endif %}
+
+<div class="cols-main">
+  <div>
+    <section class="sheet">
+      <div class="sheet-head"><h2>What would you like to do?</h2></div>
+      <div class="btn-row">
+        {% if current.file_type == "docx" %}
+          <a class="btn" href="{% url 'rewriting:index' %}?document={{ doc.pk }}">Rewrite with AI</a>
+          <a class="btn" href="{% url 'templates_manager:apply' doc.pk %}">Apply a template</a>
+          <a class="btn" href="{% url 'image_tools:gallery' doc.pk %}">Edit images</a>
+          <a class="btn" href="{% url 'splitting:index' %}?document={{ doc.pk }}">Split into parts</a>
+          <a class="btn" href="{% url 'converters:index' %}?document={{ doc.pk }}">Export as PDF</a>
+        {% else %}
+          <a class="btn" href="{% url 'converters:index' %}?document={{ doc.pk }}">Convert to editable Word</a>
+          <a class="btn" href="{% url 'splitting:index' %}?document={{ doc.pk }}">Split pages</a>
+        {% endif %}
+      </div>
+      {% if current.file_type == "pdf" %}<p class="muted small" style="margin:0.75rem 0 0">Rewriting, templates and image editing work on Word files. Convert this PDF to Word first; the PDF stays as version {{ current.version_number }}.</p>{% endif %}
+    </section>
+
+    {% if current.file_type == "docx" %}
+    <section class="sheet">
+      <div class="sheet-head"><h2>Run several steps at once</h2></div>
+      <p class="muted small">Each step works on the result of the previous one and is saved as its own version, so a later failure never loses earlier work.</p>
+      <form method="post" action="{% url 'documents:pipeline' doc.pk %}" data-pipeline>
+        {% csrf_token %}
+        <div class="form-grid">
+          {% field pipeline_form.steps wide=True %}
+          <div data-show-when="rewrite">{% field pipeline_form.mode mark_optional=False %}</div>
+          <div data-show-when="format">{% field pipeline_form.template mark_optional=False %}</div>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">Run selected steps</button><span class="muted small">Cover details come from your Settings.</span></div>
+      </form>
+    </section>
+    {% endif %}
+
+    <section class="sheet">
+      <div class="sheet-head"><h2>Preview of version {{ current.version_number }}</h2><a class="small" href="{% url 'documents:preview' doc.pk current.pk %}" target="_blank" rel="noopener">Open in a new tab</a></div>
+      <iframe class="preview-frame" title="Preview of {{ doc.original_filename }}" src="{% url 'documents:preview' doc.pk current.pk %}" loading="lazy"{% if current.file_type == "docx" %} sandbox{% endif %}></iframe>
+      {% if current.file_type == "docx" %}<p class="muted small" style="margin:0.6rem 0 0">A simplified reading preview. Page layout, headers and fonts appear only in the downloaded file.</p>{% endif %}
+    </section>
+  </div>
+
+  <aside>
+    <section class="sheet">
+      <h2>Versions</h2>
+      <ol class="stack" reversed>
+        {% for v in versions %}
+        <li{% if v.pk == current.pk %} class="is-current"{% endif %}>
+          <div><span class="v-num">Version {{ v.version_number }}</span>{% if v.pk == current.pk %} <span class="badge badge--busy">Working</span>{% endif %}</div>
+          <div class="v-meta">{{ v.summary|default:v.get_operation_display }}</div>
+          <div class="v-meta">{{ v.file_type|upper }}, {{ v.created_at|date:"j M Y, H:i" }}</div>
+          <div class="v-actions">
+            <a class="btn btn-sm" href="{% url 'documents:download_version' v.pk %}">Download</a>
+            {% if v.pk != current.pk %}
+            <form method="post" action="{% url 'documents:make_current' v.pk %}">{% csrf_token %}<button class="btn btn-quiet btn-sm" type="submit">Work from this</button></form>
+            <a class="btn btn-quiet btn-sm" href="{% url 'documents:preview' doc.pk v.pk %}" target="_blank" rel="noopener">Preview</a>
+            {% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+
+    <section class="sheet">
+      <h2>About this file</h2>
+      <dl class="facts">
+        <dt>Type</dt><dd>{{ doc.get_file_type_display }}</dd>
+        <dt>Size</dt><dd>{{ doc.file_size|filesizeformat }}</dd>
+        {% if info.page_count %}<dt>Pages</dt><dd>{{ info.page_count }}{% if info.type == "docx" %} (estimated){% endif %}</dd>{% endif %}
+        {% if info.word_count %}<dt>Words</dt><dd>{{ info.word_count }}</dd>{% endif %}
+        {% if info.images %}<dt>Images</dt><dd>{{ info.images }}</dd>{% endif %}
+        {% if info.tables %}<dt>Tables</dt><dd>{{ info.tables }}</dd>{% endif %}
+        {% if info.block_counts.heading %}<dt>Headings</dt><dd>{{ info.block_counts.heading }}</dd>{% endif %}
+        {% if info.block_counts.code %}<dt>Code lines</dt><dd>{{ info.block_counts.code }}</dd>{% endif %}
+        {% if info.page_width_mm %}<dt>Page size</dt><dd>{{ info.page_width_mm }} × {{ info.page_height_mm }} mm</dd>{% endif %}
+        {% if info.needs_ocr %}<dt>Scanned</dt><dd>Yes, OCR is needed to extract text</dd>{% endif %}
+        {% if doc.active_template %}<dt>Template</dt><dd>{{ doc.active_template.name }}</dd>{% endif %}
+      </dl>
+      <p style="margin:0.9rem 0 0"><a class="small" href="{% url 'documents:download_original' doc.pk %}">Download the untouched original</a></p>
+    </section>
+
+    {% if jobs %}
+    <section class="sheet">
+      <h2>Jobs</h2>
+      <ul class="rows">{% for job in jobs %}<li><span class="grow"><a href="{{ job.get_absolute_url }}">{{ job.get_operation_display }}</a><span class="muted small">{{ job.created_at|timesince }} ago</span></span><span class="badge badge--{{ job.status|tone }}">{{ job.get_status_display }}</span></li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+
+    <section class="sheet">
+      <h2>Delete</h2>
+      <p class="muted small">Removes the original, every version and every generated file. History entries are kept.</p>
+      <form method="post" action="{% url 'documents:delete' doc.pk %}" data-confirm="Delete {{ doc.original_filename }} and all of its versions? This cannot be undone.">{% csrf_token %}<button class="btn btn-danger btn-sm" type="submit">Delete document</button></form>
+    </section>
+  </aside>
+</div>
+{% endblock %}

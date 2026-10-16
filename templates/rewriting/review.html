@@ -1,0 +1,42 @@
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}Review rewrite{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="crumb"><a href="{{ job.document.get_absolute_url }}">{{ job.document.original_filename }}</a></div>
+    <h1>Review the rewrite</h1>
+    <p>{{ stats.changed }} of {{ total }} sections changed{% if stats.reverted %}, {{ stats.reverted }} kept original after a failed fact check{% endif %}{% if stats.flagged %}, {{ stats.flagged }} flagged for your attention{% endif %}.</p>
+  </div>
+  <div class="actions">{% if draft %}<a class="btn" href="{% url 'documents:download_output' draft.pk %}">Download draft with all changes</a>{% endif %}</div>
+</div>
+
+<nav class="tabs" aria-label="Filter sections">
+  <a href="?show=changed"{% if show == "changed" %} aria-current="page"{% endif %}>Changed and flagged</a>
+  <a href="?show=all"{% if show == "all" %} aria-current="page"{% endif %}>All sections</a>
+</nav>
+
+<form class="sheet flush" method="post">
+  {% csrf_token %}
+  <div style="padding: 0.5rem 1.4rem 0">
+  {% for r in rows %}
+    <div class="review-row{% if r.kind == 'heading' or r.kind == 'title' %} is-heading{% elif r.kind == 'code' %} is-code{% endif %}">
+      <div class="pick">{% if r.status == "changed" and job.operation == "rewrite" %}<input type="checkbox" name="accept" value="{{ r.id }}" checked aria-label="Accept this change">{% endif %}</div>
+      <div class="side"><div class="label">Original <span class="badge">{{ r.kind }}</span></div><div class="text">{{ r.left }}</div></div>
+      <div class="side"><div class="label">{% if r.status == "changed" %}Rewritten{% else %}Kept as original{% endif %} <span class="badge badge--{{ r.status|tone }}">{{ r.status|capfirst }}</span></div><div class="text">{{ r.right }}</div></div>
+      {% if r.retried and r.status == "changed" %}<p class="note is-quiet">Fixed on a second attempt after the first version lost a detail.</p>{% endif %}
+      {% if r.flag or r.note %}<p class="note{% if not r.flag and r.status == 'preserved' %} is-quiet{% endif %}">{% if r.flag %}{{ r.flag }}{% endif %}{% if r.flag and r.note %} {% endif %}{% if r.note and r.status != "preserved" %}{{ r.note }}{% elif r.note %}Not rewritten: {{ r.note }}.{% endif %}</p>{% endif %}
+    </div>
+  {% empty %}
+    <div class="empty"><p>No sections were changed. The document already reads well in this style, or every section was protected.</p></div>
+  {% endfor %}
+  </div>
+  {% if job.operation == "rewrite" and stats.changed %}
+  <div class="review-bar">
+    <div class="btn-row"><button class="btn btn-sm" type="button" data-check-all="accept">Select all</button><button class="btn btn-sm" type="button" data-check-none="accept">Select none</button></div>
+    <button class="btn btn-primary" type="submit">Save accepted changes as a new version</button>
+  </div>
+  {% elif job.operation == "pipeline" %}
+  <div class="review-bar"><span class="muted small">The combined workflow already saved every validated change as its own version.</span><a class="btn" href="{{ job.document.get_absolute_url }}">Back to document</a></div>
+  {% endif %}
+</form>
+{% endblock %}

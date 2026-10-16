@@ -1,0 +1,24 @@
+# DocuCraft AI. Tested with Python 3.12, Django 5.2 and Django 6.1.
+Django>=5.2,<6.2
+python-dotenv>=1.0
+requests>=2.31
+
+# Documents
+python-docx>=1.1
+PyMuPDF>=1.24
+pypdf>=5.0
+pdf2docx>=0.5.8
+mammoth>=1.8
+lxml>=5.0
+
+# Images and OCR
+Pillow>=11.0
+numpy>=1.26
+opencv-python-headless>=4.9
+pytesseract>=0.3.10
+
+# PostgreSQL (optional; SQLite is used unless POSTGRES_DB is set)
+# psycopg[binary]>=3.2
+
+# Background removal in the image editor (optional, large download)
+# rembg>=2.0

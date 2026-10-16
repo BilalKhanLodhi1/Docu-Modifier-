@@ -1,0 +1,47 @@
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}Rewrite{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Rewrite with AI</h1><p>Improve the wording of a Word document while keeping its facts, numbers, citations, code and links exactly as written. You review every change before anything is saved.</p></div></div>
+
+{% if not provider_ok %}<div class="notice notice--warning"><p><strong>{{ provider.label }} is not available.</strong> {{ provider_msg }} You can still set up a rewrite; it will fail until the provider is reachable. <a href="{% url 'accounts:settings' %}">Change provider</a>.</p></div>{% endif %}
+{% if cloud_blocked %}<div class="notice notice--warning"><p>{{ provider.label }} is a cloud service. Allow cloud AI in <a href="{% url 'accounts:settings' %}">Settings</a> before rewriting, or switch to Ollama to keep documents on your computer.</p></div>{% endif %}
+
+<div class="cols-main">
+  <form class="sheet" method="post" novalidate>
+    {% csrf_token %}
+    {% include "partials/form_errors.html" %}
+    {% if form.fields.document.queryset.exists %}
+    <fieldset>
+      <legend>Document</legend>
+      {% field form.document hint="Only Word documents can be rewritten. The working version is used." %}
+    </fieldset>
+    <fieldset>
+      <legend>Style</legend>
+      <div class="field{% if form.mode.errors %} has-error{% endif %}"><div class="choices as-tiles">{{ form.mode }}</div></div>
+    </fieldset>
+    <fieldset>
+      <legend>Details</legend>
+      <div class="form-grid">
+        {% field form.audience wide=True %}
+        <div class="wide" data-show-when-mode="custom">{% field form.custom_instructions %}</div>
+      </div>
+    </fieldset>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Start rewrite</button><span class="muted small">Using {{ provider.label }}</span></div>
+    {% else %}
+    <div class="empty"><p>You have no Word documents yet. Upload a .docx, or convert a PDF to Word first.</p><a class="btn" href="{% url 'documents:workspace' %}">Go to documents</a></div>
+    {% endif %}
+  </form>
+  <aside>
+    <section class="sheet">
+      <h2>What is protected</h2>
+      <p class="small">Code blocks, paragraphs with links, images or equations, and short table cells are left alone. Each rewritten section is checked for dropped numbers, dates, names, citations and URLs. If anything is missing, that section is sent back once with a note naming what was lost. If the second attempt still loses it, the original wording is kept and the section is marked so you can see why.</p>
+    </section>
+    {% if recent %}
+    <section class="sheet">
+      <h2>Recent rewrites</h2>
+      <ul class="rows">{% for job in recent %}<li><span class="grow"><a href="{% url 'rewriting:review' job.pk %}">{{ job.document.original_filename }}</a><span class="muted small">{{ job.created_at|timesince }} ago</span></span></li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

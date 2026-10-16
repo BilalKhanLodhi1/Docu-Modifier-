@@ -14,8 +14,7 @@ class RewriteForm(forms.Form):
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        ids = [d.pk for d in Document.objects.filter(owner=user) if (d.current_version and d.current_version.file_type == "docx")]
-        self.fields["document"].queryset = Document.objects.filter(pk__in=ids)
+        self.fields["document"].queryset = Document.objects.filter(owner=user).word_documents()
 
     def clean(self):
         data = super().clean()

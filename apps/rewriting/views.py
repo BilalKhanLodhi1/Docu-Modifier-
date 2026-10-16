@@ -23,7 +23,7 @@ def index(request):
     initial = {}
     if request.GET.get("document"):
         initial["document"] = request.GET["document"]
-    form = RewriteForm(request.POST or None, user=request.user, initial=initial)
+    form = RewriteForm((request.POST if request.method == "POST" else None), user=request.user, initial=initial)
     pref = UserPreference.for_user(request.user)
     provider = get_provider(pref.ai_provider or None)
     ok, status_msg = provider.available()

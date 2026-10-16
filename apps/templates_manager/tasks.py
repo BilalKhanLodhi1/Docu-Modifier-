@@ -44,6 +44,8 @@ def format_task(job, progress):
     progress("formatting", 30, "Applying template styles")
     with temp_workdir() as tmp:
         dst = tmp / "formatted.docx"
+        if job.options.get("include_toc"):
+            progress("formatting", 55, "Laying out pages to number the contents page")
         info = run_format(job, src, dst)
         progress("preparing", 90, "Saving new version")
         tpl_name = job.options.get("template_name", "template")
@@ -52,4 +54,9 @@ def format_task(job, progress):
     job.save(update_fields=["output_version"])
     job.document.active_template_id = job.options.get("template_id")
     job.document.save(update_fields=["active_template"])
-    return {"message": f"Template applied. Saved as version {v.version_number}."}
+    warnings = []
+    if info.get("toc") and not info.get("toc_page_numbers"):
+        warnings.append("Contents page numbers could not be measured because LibreOffice is not installed. "
+                        "Word fills them in when you open the file and choose Yes to update fields; "
+                        "install LibreOffice to have them in every viewer and in PDF exports.")
+    return {"message": f"Template applied. Saved as version {v.version_number}.", "warnings": warnings}

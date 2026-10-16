@@ -13,7 +13,7 @@ from .forms import ConvertForm
 @login_required
 def index(request):
     initial = {"document": request.GET.get("document")} if request.GET.get("document") else {}
-    form = ConvertForm(request.POST or None, request.FILES or None, user=request.user, initial=initial)
+    form = ConvertForm((request.POST if request.method == "POST" else None), (request.FILES if request.method == "POST" else None), user=request.user, initial=initial)
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         try:

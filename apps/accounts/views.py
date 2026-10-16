@@ -14,7 +14,7 @@ from .models import UserPreference
 def register(request):
     if request.user.is_authenticated:
         return redirect("documents:dashboard")
-    form = RegisterForm(request.POST or None)
+    form = RegisterForm((request.POST if request.method == "POST" else None))
     if request.method == "POST" and form.is_valid():
         user = form.save()
         UserPreference.for_user(user)
@@ -27,7 +27,7 @@ def register(request):
 @login_required
 def settings_view(request):
     pref = UserPreference.for_user(request.user)
-    form = PreferenceForm(request.POST or None, instance=pref, user=request.user)
+    form = PreferenceForm((request.POST if request.method == "POST" else None), instance=pref, user=request.user)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Settings saved.")

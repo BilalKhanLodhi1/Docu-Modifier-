@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% load docucraft humanize %}
+{% block title %}Documents{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Documents</h1><p>Each document keeps its original file and every version made from it.</p></div></div>
+<div class="cols-main">
+  <section class="sheet flush">
+    <div class="sheet-head">
+      <form class="filters" method="get" role="search">
+        <label class="sr-only" for="q">Search by file name</label>
+        <input id="q" type="search" name="q" value="{{ q }}" placeholder="Search by file name">
+        <label class="sr-only" for="type">File type</label>
+        <select id="type" name="type" data-autosubmit>
+          <option value="">All types</option>
+          <option value="docx"{% if kind == "docx" %} selected{% endif %}>Word</option>
+          <option value="pdf"{% if kind == "pdf" %} selected{% endif %}>PDF</option>
+        </select>
+        <button class="btn btn-sm" type="submit">Search</button>
+        {% if q or kind %}<a class="btn btn-quiet btn-sm" href="{% url 'documents:workspace' %}">Clear</a>{% endif %}
+      </form>
+    </div>
+    {% if documents %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Name</th><th>Type</th><th class="num">Size</th><th class="num">Versions</th><th>Uploaded</th><th>Status</th></tr></thead>
+      <tbody>{% for d in documents %}
+        <tr><td class="doc-name"><a href="{{ d.get_absolute_url }}">{{ d.original_filename }}</a></td><td><span class="filetype">{{ d.file_type|upper }}</span></td><td class="num nowrap">{{ d.file_size|filesizeformat }}</td><td class="num">{{ d.nversions }}</td><td class="nowrap">{{ d.uploaded_at|naturalday:"j M Y" }}</td><td><span class="badge badge--{{ d.status|tone }}">{{ d.get_status_display }}</span></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="empty">{% if q or kind %}<p>No documents match that search.</p>{% else %}<p>You have no documents yet. Upload one to get started.</p>{% endif %}</div>
+    {% endif %}
+  </section>
+  <aside><section class="sheet"><h2>Upload</h2>{% include "partials/upload.html" %}</section></aside>
+</div>
+{% endblock %}

@@ -4,7 +4,10 @@ Providers expose one method, `complete(system, user, json_mode=True)`, that
 returns the model's raw text. Configuration comes from Django settings, which
 in turn read environment variables — keys are never hardcoded.
 """
+import json
 import logging
+import time
+
 
 import requests
 from django.conf import settings
@@ -43,6 +46,23 @@ class NullProvider(AIProvider):
                               "Formatting, splitting, image and conversion tools still work.")
 
 
+def _context_size(system, user):
+    """Context window for one request: room for the prompt plus an answer of similar length.
+
+    Reserving only what is needed keeps memory use and load time down on laptops.
+    Roughly 3 characters per token; rounded up to a multiple of 2048, between 4096 and 16384.
+    """
+    prompt_tokens = (len(system) + len(user)) // 3
+    needed = prompt_tokens + len(user) // 3 + 512
+    return max(4096, min(16384, -(-needed // 2048) * 2048))
+
+
+def _ollama_name(name):
+    """Ollama treats 'llama3.1' and 'llama3.1:latest' as the same model; nothing else is interchangeable."""
+    name = name.strip()
+    return name if ":" in name else f"{name}:latest"
+
+
 class OllamaProvider(AIProvider):
     name = "ollama"
     label = "Ollama (local)"
@@ -56,8 +76,10 @@ class OllamaProvider(AIProvider):
             r = requests.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=4)
             r.raise_for_status()
             models = [m.get("name", "") for m in r.json().get("models", [])]
-            if not any(m == self.model or m.split(":")[0] == self.model.split(":")[0] for m in models):
-                return False, f"Ollama is running but model '{self.model}' is not pulled. Run: ollama pull {self.model}"
+            if _ollama_name(self.model) not in {_ollama_name(m) for m in models}:
+                have = ", ".join(sorted(models)) or "none"
+                return False, (f"Ollama is running but model '{self.model}' is not installed. "
+                               f"Run: ollama pull {self.model}  (installed: {have})")
             return True, f"Connected to Ollama, model {self.model}"
         except requests.RequestException:
             return False, f"Ollama is not reachable at {settings.OLLAMA_BASE_URL}. Start it with: ollama serve"
@@ -66,22 +88,63 @@ class OllamaProvider(AIProvider):
         payload = {
             "model": self.model,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "stream": False,
-            "options": {"temperature": 0.2, "num_ctx": 16384},
+            # Streaming: text arrives as it is written, so the timeout only trips if the model goes silent.
+            "stream": True,
+            "keep_alive": "15m",
+            "options": {"temperature": 0.2, "num_ctx": _context_size(system, user)},
         }
         if json_mode:
             payload["format"] = "json"
+        url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat"
         try:
-            r = requests.post(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat", json=payload,
-                              timeout=settings.AI_TIMEOUT)
+            r = requests.post(url, json=payload, stream=True, timeout=(10, settings.AI_TIMEOUT))
         except requests.Timeout:
-            raise AIProviderError("The local AI model took too long to respond. Try a smaller model or a shorter document.")
+            raise AIProviderError(self._slow_message("start answering"))
         except requests.RequestException:
             raise AIProviderError("Could not reach Ollama. Make sure it is running (ollama serve).")
-        if r.status_code != 200:
-            log.warning("Ollama error %s: %s", r.status_code, r.text[:300])
-            raise AIProviderError(f"Ollama returned an error (HTTP {r.status_code}). Check that the model is installed.")
-        return r.json().get("message", {}).get("content", "")
+        with r:
+            if r.status_code == 200:
+                return self._read_stream(r)
+            self._raise_for_status(r)
+
+    def _read_stream(self, response):
+        deadline = time.monotonic() + settings.AI_MAX_CALL_SECONDS
+        parts = []
+        try:
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                chunk = json.loads(line)
+                if chunk.get("error"):
+                    raise AIProviderError(f"Ollama reported an error: {chunk['error']}")
+                parts.append(chunk.get("message", {}).get("content", ""))
+                if chunk.get("done"):
+                    break
+                if time.monotonic() > deadline:
+                    raise AIProviderError(
+                        f"One part of the document took over {settings.AI_MAX_CALL_SECONDS // 60} minutes. "
+                        "Lower AI_CHUNK_CHARS in .env (for example to 1500) or use a smaller model.")
+        except (requests.Timeout, requests.ConnectionError):
+            raise AIProviderError(self._slow_message("continue"))
+        except ValueError:
+            raise AIProviderError("Ollama sent a response DocuCraft could not read. Try again.")
+        return "".join(parts)
+
+    def _slow_message(self, what):
+        return (f"The local model '{self.model}' did not {what} within {settings.AI_TIMEOUT} seconds. "
+                "It may still be loading, or this computer may be busy. Try again, raise AI_TIMEOUT in .env, "
+                "or use a smaller model.")
+
+    def _raise_for_status(self, r):
+        log.warning("Ollama error %s: %s", r.status_code, r.text[:300])
+        try:
+            detail = r.json().get("error", "")
+        except ValueError:
+            detail = ""
+        if r.status_code == 404:
+            raise AIProviderError(f"Ollama has no model named '{self.model}'. Run: ollama pull {self.model}, "
+                                  "or set OLLAMA_MODEL in .env to a name shown by: ollama list")
+        raise AIProviderError(f"Ollama returned an error (HTTP {r.status_code}){': ' + detail if detail else ''}.")
 
 
 class AnthropicProvider(AIProvider):

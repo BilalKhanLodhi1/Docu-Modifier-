@@ -35,6 +35,7 @@ class PipelineForm(forms.Form):
         from services.prompts import MODE_LABELS
         self.fields["mode"].choices = [(k, v) for k, v in MODE_LABELS.items() if k != "custom"]
         self.fields["template"].queryset = DocumentTemplate.objects.visible_to(user)
+        self.fields["template"].empty_label = "Choose a template"
 
     def clean(self):
         data = super().clean()

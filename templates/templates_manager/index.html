@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Templates{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Templates</h1><p>A template sets page size, margins, fonts, headings, cover page, table of contents, header, footer and page numbers. Apply one from any Word document's page.</p></div>
+  <div class="actions"><a class="btn btn-primary" href="{% url 'templates_manager:create' %}">New template</a></div>
+</div>
+<section class="sheet">
+  <div class="tpl-list">
+  {% for t in templates %}
+    <div class="tpl">
+      <div class="tpl-page{% if t.kind == 'corporate' %} is-corporate{% endif %}" aria-hidden="true"><i class="t"></i><i class="s"></i><i></i><i></i><i class="s"></i><i></i></div>
+      <div>
+        <h3>{{ t.name }}</h3>
+        <p class="muted">{{ t.description|default:t.get_kind_display }}</p>
+        <p class="small">{% if t.is_builtin %}<span class="badge">Built in</span>{% elif t.owner_id == request.user.id %}<span class="badge badge--busy">Yours</span>{% if t.is_shared %} <span class="badge">Shared</span>{% endif %}{% else %}<span class="badge">Shared by {{ t.owner.get_username }}</span>{% endif %}</p>
+      </div>
+      <div class="actions">
+        <a class="btn btn-sm" href="{% url 'templates_manager:create' %}?from={{ t.pk }}">Duplicate</a>
+        {% if t.owner_id == request.user.id %}
+        <a class="btn btn-sm" href="{% url 'templates_manager:edit' t.pk %}">Edit</a>
+        <form method="post" action="{% url 'templates_manager:delete' t.pk %}" data-confirm="Delete the template {{ t.name }}?">{% csrf_token %}<button class="btn btn-quiet btn-sm" type="submit">Delete</button></form>
+        {% endif %}
+      </div>
+    </div>
+  {% empty %}
+    <div class="empty"><p>No templates available. Run the database migrations to add the built-in ones.</p></div>
+  {% endfor %}
+  </div>
+</section>
+{% endblock %}

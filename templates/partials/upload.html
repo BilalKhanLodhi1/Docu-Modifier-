@@ -1,0 +1,11 @@
+<form class="upload" method="post" action="{% url 'documents:upload' %}" enctype="multipart/form-data" data-upload>
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <label class="dropzone">
+    <input type="file" name="file" accept=".docx,.pdf" required>
+    <strong>Drop a Word or PDF file here</strong>
+    <span class="muted">or click to choose one. Up to {{ max_upload|default:"25" }} MB.</span>
+  </label>
+  <div class="upload-status" aria-live="polite"></div>
+  <noscript><button class="btn btn-primary" type="submit">Upload</button></noscript>
+</form>

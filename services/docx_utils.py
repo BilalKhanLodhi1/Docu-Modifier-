@@ -1,4 +1,5 @@
 """Low-level helpers for walking and classifying python-docx structures."""
+import copy
 import re
 
 from docx.document import Document as _Document
@@ -148,19 +149,91 @@ def classify_paragraph(paragraph):
     return "paragraph"
 
 
-def set_paragraph_text(paragraph, new_text):
-    """Replace a paragraph's text while keeping paragraph properties and first-run formatting.
+def _run_signature(run):
+    """The visible character formatting of a run, ignoring noise such as language tags."""
+    f = run.font
+    try:
+        color = str(f.color.rgb) if f.color is not None and f.color.type is not None else ""
+    except (AttributeError, ValueError):
+        color = ""
+    return (bool(run.bold), bool(run.italic), bool(run.underline), bool(f.strike), bool(f.superscript),
+            bool(f.subscript), str(f.highlight_color or ""), color, f.name or "")
 
-    Only used on paragraphs without hyperlinks, drawings, fields or equations
+
+def set_paragraph_text(paragraph, new_text):
+    """Replace a paragraph's text, keeping paragraph properties and inline formatting.
+
+    The run style used for most of the text becomes the base. Words that were styled differently
+    (bold, italic, code font, superscript...) keep that style wherever the same text still appears
+    in the new wording. Only used on paragraphs without hyperlinks, drawings, fields or equations
     (those are preserved untouched by the rewrite engine).
     """
+    from docx.text.run import Run
     runs = paragraph.runs
     if not runs:
         paragraph.add_run(new_text)
         return
-    # Keep run that carries most text so the dominant formatting survives.
-    main = max(runs, key=lambda r: len(r.text))
+    # Merge neighbouring runs with identical formatting; Word often splits one word into several runs.
+    groups = []
     for r in runs:
-        if r is not main:
-            r._element.getparent().remove(r._element)
-    main.text = new_text
+        sig = _run_signature(r)
+        if groups and groups[-1][0] == sig:
+            groups[-1][1] += r.text
+        else:
+            groups.append([sig, r.text, r])
+    weight = {}
+    for sig, text, _ in groups:
+        weight[sig] = weight.get(sig, 0) + len(text)
+    base_sig = max(weight, key=weight.get)
+    base_run = next(r for sig, _, r in groups if sig == base_sig)
+
+    # Find each specially formatted phrase in the new text, in order where possible.
+    old_text = "".join(text for _, text, _ in groups)
+    spans, cursor, offset = [], 0, 0
+    for sig, text, run in groups:
+        phrase = text.strip()
+        start_in_old = offset + (len(text) - len(text.lstrip()))
+        offset += len(text)
+        if sig == base_sig or not phrase:
+            continue
+        if len(phrase) < 2:
+            # Single characters only for super/subscripts (note markers, formulas), placed by position.
+            if not (sig[4] or sig[5]):
+                continue
+            hits = [i for i in range(len(new_text)) if new_text.startswith(phrase, i)]
+            if not hits:
+                continue
+            target = start_in_old / max(1, len(old_text)) * len(new_text)
+            at = min(hits, key=lambda i: abs(i - target))
+        else:
+            at = new_text.find(phrase, cursor)
+            if at < 0:
+                at = new_text.find(phrase)
+        if at < 0 or any(a < at + len(phrase) and at < b for a, b, _ in spans):
+            continue
+        spans.append((at, at + len(phrase), run))
+        cursor = at + len(phrase)
+    spans.sort(key=lambda x: x[0])
+
+    pieces, pos = [], 0
+    for a, b, run in spans:
+        if a > pos:
+            pieces.append((new_text[pos:a], base_run))
+        pieces.append((new_text[a:b], run))
+        pos = b
+    if pos < len(new_text) or not pieces:
+        pieces.append((new_text[pos:], base_run))
+
+    p_el = paragraph._p
+    first_r = runs[0]._r
+    insert_at = list(p_el).index(first_r)
+    templates = {id(r): copy.deepcopy(r._r) for _, _, r in groups}
+    for r in runs:
+        p_el.remove(r._r)
+    for offset, (text, src) in enumerate(pieces):
+        r_el = copy.deepcopy(templates[id(src)])
+        for child in list(r_el):
+            if child.tag != qn("w:rPr"):
+                r_el.remove(child)
+        p_el.insert(insert_at + offset, r_el)
+        Run(r_el, paragraph).text = text

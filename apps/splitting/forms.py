@@ -18,7 +18,7 @@ class SplitForm(forms.Form):
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["document"].queryset = Document.objects.filter(owner=user)
+        self.fields["document"].queryset = Document.objects.filter(owner=user).with_current_type()
 
     def clean(self):
         data = super().clean()

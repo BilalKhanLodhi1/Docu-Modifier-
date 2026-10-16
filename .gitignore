@@ -1,0 +1,38 @@
+.env
+*.sqlite3
+media/
+staticfiles/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+.idea/
+.vscode/
+
+
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Database
+*.sqlite3
+
+# User uploads and generated files
+media/
+staticfiles/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+
+# Editors and macOS
+.DS_Store
+.idea/
+.vscode/

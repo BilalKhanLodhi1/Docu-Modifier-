@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}Convert{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Convert</h1><p>Turn a Word document into a PDF, or a PDF into an editable Word document. Scanned PDFs are read with OCR when Tesseract is installed.</p></div></div>
+<div class="cols-main">
+  <form class="sheet" method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    {% include "partials/form_errors.html" %}
+    <div class="form-grid">
+      {% field form.document wide=True hint="The working version is converted. Word becomes PDF; PDF becomes Word." %}
+      {% field form.file wide=True hint="Or upload a new .docx or .pdf. It's added to your documents." %}
+    </div>
+    <fieldset style="margin-top:1.25rem"><legend>When converting a PDF</legend><div class="form-grid">{% field form.ocr %}{% field form.ocr_lang %}</div></fieldset>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Convert</button></div>
+  </form>
+  <aside>
+    <section class="sheet"><h2>Tools on this server</h2>{% include "partials/deps.html" %}</section>
+    {% if recent %}<section class="sheet"><h2>Recent conversions</h2><ul class="rows">{% for job in recent %}{% include "partials/job_row.html" %}{% endfor %}</ul></section>{% endif %}
+  </aside>
+</div>
+{% endblock %}

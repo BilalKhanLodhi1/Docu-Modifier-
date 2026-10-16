@@ -74,12 +74,14 @@ def execute_job(job_id):
         _fail(job, "This operation is not available.")
         return
     job.status, job.started_at, job.stage, job.progress = "running", timezone.now(), "extracting", 2
-    job.save(update_fields=["status", "started_at", "stage", "progress"])
+    job.heartbeat_at = job.started_at
+    job.save(update_fields=["status", "started_at", "heartbeat_at", "stage", "progress"])
     doc.status = "processing"
     doc.save(update_fields=["status", "updated_at"])
 
     def progress(stage, percent, message=""):
-        ProcessingJob.objects.filter(pk=job.pk).update(stage=stage, progress=min(99, int(percent)), message=message[:300])
+        ProcessingJob.objects.filter(pk=job.pk).update(stage=stage, progress=min(99, int(percent)), message=message[:300],
+                                                       heartbeat_at=timezone.now())
 
     try:
         result = fn(job, progress) or {}
@@ -116,9 +118,16 @@ def _fail(job, message):
 
 
 def _expire_stale_jobs():
+    """Fail jobs that have reported no progress for twice the job timeout.
+
+    Measured from the last progress report, not from creation, so a long job that is
+    still working (a big document on a slow machine) is never cut off.
+    """
+    from django.db.models import Q
     limit = timezone.now() - timedelta(seconds=settings.DOCUCRAFT_JOB_TIMEOUT * 2)
-    for job in ProcessingJob.objects.filter(status__in=("queued", "running"), created_at__lt=limit):
-        _fail(job, "The job did not finish in time (the server may have restarted). Please retry.")
+    silent = (Q(heartbeat_at__lt=limit) | Q(heartbeat_at__isnull=True, created_at__lt=limit))
+    for job in ProcessingJob.objects.filter(silent, status__in=("queued", "running")):
+        _fail(job, "This job stopped reporting progress (the server may have restarted). Please try again.")
 
 
 # ----------------------------------------------------------------------------

@@ -1,0 +1,4 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Preview: version {{ version.version_number }}</title>
+<style>html, body { margin: 0; height: 100%; } object, iframe { display: block; width: 100%; height: 100%; border: 0; } p { font: 15px/1.5 system-ui, sans-serif; padding: 2rem; }</style></head>
+<body><object data="{% url 'documents:download_version' version.pk %}?inline=1" type="application/pdf"><p>This browser cannot show PDFs inline. <a href="{% url 'documents:download_version' version.pk %}" target="_top">Download the PDF</a> to view it.</p></object></body></html>

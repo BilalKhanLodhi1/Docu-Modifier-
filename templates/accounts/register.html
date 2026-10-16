@@ -1,0 +1,15 @@
+{% extends "accounts/auth_base.html" %}{% load docucraft %}
+{% block title %}Create an account{% endblock %}
+{% block auth %}
+<h1>Create an account</h1>
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% include "partials/form_errors.html" %}
+  {% field form.username hint="Letters, digits and @ . + - _ only." %}
+  {% field form.email %}
+  {% field form.password1 hint="At least 8 characters, not entirely numbers." %}
+  {% field form.password2 hint=" " %}
+  <button class="btn btn-primary" type="submit">Create account</button>
+</form>
+{% endblock %}
+{% block switch %}<p class="switch">Already have an account? <a href="{% url 'accounts:login' %}">Sign in</a></p>{% endblock %}

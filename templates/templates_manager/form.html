@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}{% if creating %}New template{% else %}Edit {{ tpl.name }}{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="crumb"><a href="{% url 'templates_manager:index' %}">Templates</a></div><h1>{% if creating %}New template{% else %}{{ tpl.name }}{% endif %}</h1><p>All sizes are in points and all margins in inches.</p></div></div>
+<form class="sheet" method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+  {% include "partials/form_errors.html" %}
+  <fieldset><legend>About</legend><div class="form-grid">
+    {% field form.name %}{% field form.kind %}
+    {% field form.description wide=True %}
+    {% field form.logo hint="PNG or JPEG, under 2 MB. Shown on the cover page." %}
+    {% field form.is_shared hint="Let other users of this installation use it. Only you can edit it." %}
+  </div></fieldset>
+  <fieldset><legend>Page</legend><div class="form-grid">
+    {% field form.page_size %}{% field form.orientation %}
+    {% field form.margin_top %}{% field form.margin_bottom %}
+    {% field form.margin_left %}{% field form.margin_right %}
+  </div></fieldset>
+  <fieldset><legend>Text</legend><div class="form-grid">
+    {% field form.body_font %}{% field form.body_size %}
+    {% field form.line_spacing %}{% field form.space_after_pt %}
+    {% field form.justify wide=True %}
+  </div></fieldset>
+  <fieldset><legend>Headings and code</legend><div class="form-grid">
+    {% field form.heading_font %}{% field form.title_size %}
+    {% field form.h1_size %}{% field form.h2_size %}
+    {% field form.h3_size %}{% field form.page_break_before_h1 %}
+    {% field form.code_font %}{% field form.code_size %}
+  </div></fieldset>
+  <fieldset><legend>Cover, contents and page furniture</legend><div class="form-grid">
+    {% field form.cover_enabled %}{% field form.cover_style %}
+    {% field form.toc %}{% field form.page_numbers %}
+    {% field form.page_number_style %}{% field form.header_text %}
+    {% field form.footer_text %}
+  </div></fieldset>
+  <div class="form-actions"><button class="btn btn-primary" type="submit">{% if creating %}Create template{% else %}Save template{% endif %}</button><a class="btn btn-quiet" href="{% url 'templates_manager:index' %}">Cancel</a></div>
+</form>
+{% endblock %}

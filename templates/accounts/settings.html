@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Settings</h1><p>Choose how documents are rewritten and what goes on your cover pages by default.</p></div></div>
+<div class="cols-main">
+  <form class="sheet" method="post" novalidate>
+    {% csrf_token %}
+    {% include "partials/form_errors.html" %}
+    <fieldset>
+      <legend>AI rewriting</legend>
+      <div class="form-grid">
+        {% field form.ai_provider hint="Ollama runs on your own computer, so documents never leave it." %}
+        {% field form.default_template %}
+        {% field form.allow_cloud_ai wide=True hint="Required for Anthropic or OpenAI. Only the text of the sections being rewritten is sent." %}
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Cover page defaults</legend>
+      <div class="form-grid">
+        {% field form.author_name %}{% field form.author_id %}
+        {% field form.organization %}{% field form.department %}
+        {% field form.program wide=True %}
+      </div>
+    </fieldset>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Save settings</button></div>
+  </form>
+  <aside>
+    <section class="sheet">
+      <h2>AI provider</h2>
+      <p><strong>{{ provider.label }}</strong> <span class="badge badge--{% if provider_ok %}ok{% else %}bad{% endif %}">{% if provider_ok %}Connected{% else %}Not available{% endif %}</span></p>
+      <p class="muted small">{{ provider_msg }}</p>
+    </section>
+    <section class="sheet">
+      <h2>Tools on this server</h2>
+      {% include "partials/deps.html" %}
+    </section>
+    <section class="sheet">
+      <h2>Limits</h2>
+      <dl class="facts"><dt>Largest upload</dt><dd>{{ max_upload }} MB</dd><dt>Files kept for</dt><dd>{{ retention }} days</dd></dl>
+    </section>
+  </aside>
+</div>
+{% endblock %}

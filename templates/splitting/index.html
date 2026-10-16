@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}Split{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Split a document</h1><p>Break a PDF into page ranges, or a Word document into its sections. You see the parts and name them before anything is created.</p></div></div>
+<div class="cols-main">
+  <form class="sheet" method="post" novalidate data-split>
+    {% csrf_token %}
+    {% include "partials/form_errors.html" %}
+    {% if form.fields.document.queryset.exists %}
+    <div class="form-grid">
+      {% field form.document wide=True %}
+      {% field form.method wide=True %}
+      <div class="wide" data-for-method="ranges">{% field form.ranges hint="Separate ranges with commas. Use “end” for the last page." %}</div>
+      <div class="wide" data-for-method="every_n">{% field form.pages_per_file %}</div>
+      <div class="wide" data-for-method="heading custom">{% field form.heading_level hint="Split before each heading at or above this level." %}</div>
+      <p class="wide muted small" data-for-method="tasks">Splits before headings or lines that start with Task, Lab, Chapter, Exercise, Question or Part.</p>
+      <p class="wide muted small" data-for-method="custom">You'll choose which sections to keep on the next screen.</p>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Preview the parts</button></div>
+    {% else %}
+    <div class="empty"><p>Upload a document first.</p><a class="btn" href="{% url 'documents:workspace' %}">Go to documents</a></div>
+    {% endif %}
+  </form>
+  <aside>
+    {% if recent %}<section class="sheet"><h2>Recent splits</h2><ul class="rows">{% for job in recent %}{% include "partials/job_row.html" %}{% endfor %}</ul></section>{% endif %}
+    <section class="sheet"><h2>Good to know</h2><p class="small">Word documents have no fixed pages, so they split by structure. To split a Word file at exact page numbers, export it to PDF first and split the PDF.</p></section>
+  </aside>
+</div>
+{% with docs=form.fields.document.queryset %}
+<script type="application/json" id="doc-types">{ {% for d in docs %}"{{ d.pk }}": "{{ d.current_type }}"{% if not forloop.last %}, {% endif %}{% endfor %} }</script>
+{% endwith %}
+<script type="application/json" id="split-methods">{"pdf": [{% for k, v in pdf_methods %}"{{ k }}"{% if not forloop.last %},{% endif %}{% endfor %}], "docx": [{% for k, v in docx_methods %}"{{ k }}"{% if not forloop.last %},{% endif %}{% endfor %}]}</script>
+{% endblock %}

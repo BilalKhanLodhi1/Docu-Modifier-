@@ -37,7 +37,7 @@ def create(request):
                                 kind=source.kind if source else "academic",
                                 name=f"{source.name} (copy)" if source else "",
                                 description=source.description if source else "")
-    form = TemplateForm(request.POST or None, request.FILES or None, instance=instance)
+    form = TemplateForm((request.POST if request.method == "POST" else None), (request.FILES if request.method == "POST" else None), instance=instance)
     if request.method == "POST" and form.is_valid():
         tpl = form.save(commit=False)
         tpl.owner = request.user
@@ -52,7 +52,7 @@ def create(request):
 @login_required
 def edit(request, pk):
     tpl = _editable(request, pk)
-    form = TemplateForm(request.POST or None, request.FILES or None, instance=tpl)
+    form = TemplateForm((request.POST if request.method == "POST" else None), (request.FILES if request.method == "POST" else None), instance=tpl)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Template saved.")
@@ -84,7 +84,7 @@ def apply(request, doc_pk):
         "organization": pref.organization, "department": pref.department, "program": pref.program,
         "author": pref.author_name, "author_id": pref.author_id, "date": date.today().strftime("%d %B %Y"),
     }
-    form = FormatForm(request.POST or None, request.FILES or None, user=request.user, sections=sections, initial=initial)
+    form = FormatForm((request.POST if request.method == "POST" else None), (request.FILES if request.method == "POST" else None), user=request.user, sections=sections, initial=initial)
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         tpl = d["template"]

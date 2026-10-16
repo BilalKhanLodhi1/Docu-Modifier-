@@ -8,6 +8,7 @@ from django.db.models import Count, Q
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_POST
 
 from apps.history.models import ProcessingHistory, record
@@ -54,7 +55,15 @@ def dashboard(request):
     recent_outputs = JobOutput.objects.filter(job__user=request.user).select_related("job__document").order_by("-created_at")[:6]
     recent_versions = DocumentVersion.objects.filter(document__owner=request.user).exclude(operation="upload") \
         .select_related("document").order_by("-created_at")[:6]
+    results = sorted(
+        [{"when": v.created_at, "title": f"{v.document.original_filename}, version {v.version_number}",
+          "detail": v.summary or v.get_operation_display(), "doc_url": v.document.get_absolute_url(),
+          "url": reverse("documents:download_version", args=[v.pk])} for v in recent_versions] +
+        [{"when": o.created_at, "title": o.filename, "detail": o.label, "doc_url": o.job.document.get_absolute_url(),
+          "url": reverse("documents:download_output", args=[o.pk])} for o in recent_outputs],
+        key=lambda r: r["when"], reverse=True)[:6]
     return render(request, "dashboard.html", {
+        "results": results,
         "stats": stats,
         "recent_docs": docs[:6],
         "activity": ProcessingHistory.objects.filter(user=request.user)[:8],
@@ -120,6 +129,11 @@ def create_document(user, uploaded, file_type):
     return doc
 
 
+def _default_template_id(user):
+    from apps.accounts.models import UserPreference
+    return UserPreference.for_user(user).default_template_id
+
+
 @login_required
 def detail(request, pk):
     doc = owned_document(request, pk)
@@ -127,11 +141,14 @@ def detail(request, pk):
     return render(request, "documents/detail.html", {
         "doc": doc, "current": current, "versions": doc.versions.all(),
         "jobs": doc.jobs.all()[:10], "info": doc.inspection,
-        "pipeline_form": PipelineForm(user=request.user, initial={"steps": ["rewrite", "format"]}),
+        "pipeline_form": PipelineForm(user=request.user, initial={
+            "steps": ["rewrite", "format"],
+            "template": doc.active_template_id or _default_template_id(request.user)}),
     })
 
 
 @login_required
+@xframe_options_sameorigin
 def preview(request, pk, version_pk):
     doc = owned_document(request, pk)
     version = get_object_or_404(DocumentVersion, pk=version_pk, document=doc)
@@ -142,7 +159,10 @@ def preview(request, pk, version_pk):
     except Exception:
         log.exception("Preview failed for version %s", version.pk)
         html = "<p class='text-muted'>A preview could not be generated for this document. Download it to view.</p>"
-    return render(request, "documents/_docx_preview.html", {"html": html, "version": version})
+    resp = render(request, "documents/_docx_preview.html", {"html": html, "version": version})
+    # Generated HTML never needs scripts; block them outright as a second line of defence.
+    resp["Content-Security-Policy"] = "default-src 'none'; img-src data:; style-src 'unsafe-inline'"
+    return resp
 
 
 @login_required
@@ -171,7 +191,7 @@ def make_current(request, version_pk):
 @login_required
 def pipeline(request, pk):
     doc = owned_document(request, pk)
-    form = PipelineForm(request.POST or None, user=request.user)
+    form = PipelineForm((request.POST if request.method == "POST" else None), user=request.user)
     if request.method == "POST" and form.is_valid():
         tpl = form.cleaned_data.get("template")
         from apps.accounts.models import UserPreference
@@ -207,12 +227,14 @@ def _file_response(field, filename, inline=False):
 
 
 @login_required
+@xframe_options_sameorigin
 def download_version(request, version_pk):
     v = owned_version(request, version_pk)
     return _file_response(v.file, v.download_name(), inline=request.GET.get("inline") == "1" and v.file_type == "pdf")
 
 
 @login_required
+@xframe_options_sameorigin
 def download_output(request, output_pk):
     out = get_object_or_404(JobOutput.objects.select_related("job"), pk=output_pk, job__user=request.user)
     return _file_response(out.file, out.filename, inline=request.GET.get("inline") == "1" and out.file_type == "pdf")

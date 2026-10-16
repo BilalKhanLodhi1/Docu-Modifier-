@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Images in {{ doc.original_filename }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="crumb"><a href="{{ doc.get_absolute_url }}">{{ doc.original_filename }}</a></div><h1>Images</h1><p>{{ images|length }} image{{ images|pluralize }} in version {{ version.version_number }}. Choose one to edit.</p></div></div>
+{% if images %}
+<div class="gallery">
+  {% for img in images %}
+  <a href="{% url 'image_tools:editor' doc.pk img.index %}">
+    <div class="thumb"><img src="{% url 'image_tools:raw' doc.pk img.index %}" alt="{{ img.caption|default:'Image' }} {{ forloop.counter }}" loading="lazy"></div>
+    <div class="cap"><strong>{% if img.caption %}{{ img.caption|truncatechars:60 }}{% else %}Image {{ forloop.counter }}{% endif %}</strong><span class="muted">{{ img.format }}, {{ img.width }} × {{ img.height }} px, {{ img.size_bytes|filesizeformat }}{% if img.dpi_estimate and img.dpi_estimate < 150 %}. Low resolution for print{% endif %}</span></div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<section class="sheet"><div class="empty"><p>This version has no images. Pictures that are floating shapes or charts drawn in Word are not listed.</p></div></section>
+{% endif %}
+{% endblock %}

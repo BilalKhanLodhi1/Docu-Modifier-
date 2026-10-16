@@ -28,7 +28,7 @@ def _docx_version(request, doc_pk):
 
 @login_required
 def index(request):
-    docs = [d for d in Document.objects.filter(owner=request.user) if d.current_version and d.current_version.file_type == "docx"]
+    docs = Document.objects.filter(owner=request.user).word_documents()
     return render(request, "image_tools/index.html", {"documents": docs})
 
 

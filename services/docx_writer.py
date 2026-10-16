@@ -10,7 +10,8 @@ from pathlib import Path
 
 import docx
 from docx.enum.section import WD_ORIENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_LINE_SPACING
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_LINE_SPACING, WD_TAB_ALIGNMENT, WD_TAB_LEADER
+from docx.enum.style import WD_STYLE_TYPE
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Mm, Pt, RGBColor
@@ -248,8 +249,11 @@ def _build_cover(document, cfg, meta):
     font = cfg["heading_font"]
     created = []
 
+    cover_style = _ensure_paragraph_style(document, COVER_STYLE)
+
     def line(text, size=12, bold=False, italic=False, space_after=4, color=None):
         p = _new_paragraph_before(first, document)
+        p.style = cover_style
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.paragraph_format.space_after = Pt(space_after)
         p.paragraph_format.first_line_indent = None
@@ -291,9 +295,10 @@ def _build_cover(document, cfg, meta):
         if meta.get("department"):
             line(meta["department"], 14, space_after=4)
         if meta.get("program"):
-            line(meta["program"], 13, space_after=30)
-        else:
-            line("", space_after=20)
+            line(meta["program"], 13, space_after=4)
+        if meta.get("course"):
+            line(meta["course"], 13, italic=True, space_after=4)
+        line("", space_after=26)
         if meta.get("report_number"):
             line(meta["report_number"], 14, bold=True, space_after=8)
         line(meta.get("title") or "Untitled document", 24, bold=True, space_after=8)
@@ -306,8 +311,6 @@ def _build_cover(document, cfg, meta):
                 line(meta["author"], 13, space_after=2)
             if meta.get("author_id"):
                 line(meta["author_id"], 12, space_after=12)
-        if meta.get("course"):
-            line(meta["course"], 12, space_after=12)
         if meta.get("submitted_to"):
             line("Submitted to", 12, bold=True, space_after=2)
             line(meta["submitted_to"], 13, space_after=12)
@@ -349,53 +352,248 @@ def _build_cover(document, cfg, meta):
     return len(created)
 
 
-def _insert_toc(document, cfg, after_paragraphs):
-    """Insert a 'Contents' page with a real TOC field.
+COVER_STYLE = "DocuCraft Cover"
+TOC_HEADING_STYLE = "TOC Heading"
+TOC_LEVEL_STYLES = ("TOC 1", "TOC 2", "TOC 3")
+GENERATED_STYLES = {COVER_STYLE, TOC_HEADING_STYLE, *TOC_LEVEL_STYLES}
+BOOKMARK_PREFIX = "_TocDC"
 
-    The field result is pre-filled with the heading list so the page is useful
-    in viewers that do not update fields (LibreOffice PDF export); Word
-    replaces it with page-numbered entries when fields update on open.
+
+def _ensure_paragraph_style(document, name, base="Normal"):
+    try:
+        return document.styles[name]
+    except KeyError:
+        st = document.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
+        try:
+            st.base_style = document.styles[base]
+        except KeyError:
+            pass
+        return st
+
+
+def _remove_generated_front_matter(document):
+    """Remove a cover page, contents page and heading bookmarks that DocuCraft added earlier.
+
+    Without this, formatting an already-formatted version stacks a second cover and contents page.
+    """
+    body = document.element.body
+    removed = 0
+    for p in list(body.iterchildren(qn("w:p"))):
+        ps = p.find(qn("w:pPr"))
+        sid = ps.find(qn("w:pStyle")).get(qn("w:val")) if ps is not None and ps.find(qn("w:pStyle")) is not None else ""
+        try:
+            name = document.styles.get_by_id(sid, 1).name if sid else ""
+        except Exception:
+            name = ""
+        if name in GENERATED_STYLES:
+            body.remove(p)
+            removed += 1
+    ids = set()
+    for bm in list(body.iter(qn("w:bookmarkStart"))):
+        if (bm.get(qn("w:name")) or "").startswith(BOOKMARK_PREFIX):
+            ids.add(bm.get(qn("w:id")))
+            bm.getparent().remove(bm)
+    for be in list(body.iter(qn("w:bookmarkEnd"))):
+        if be.get(qn("w:id")) in ids:
+            be.getparent().remove(be)
+    return removed
+
+
+def _text_width_in(cfg):
+    w, h = PAGE_SIZES.get(cfg["page_size"], PAGE_SIZES["A4"])
+    width = h if cfg.get("orientation") == "landscape" else w
+    m = cfg["margins_in"]
+    return width / 914400 - float(m["left"]) - float(m["right"])
+
+
+def _setup_toc_styles(document, cfg):
+    width = Inches(max(2.0, _text_width_in(cfg) - 0.02))
+    head = _ensure_paragraph_style(document, TOC_HEADING_STYLE)
+    head.font.name, head.font.size, head.font.bold = cfg["heading_font"], Pt(int((cfg.get("heading_sizes") or {}).get("1", 16))), True
+    head.font.color.rgb = _hex(cfg.get("heading_color", "000000"))
+    head.paragraph_format.space_before, head.paragraph_format.space_after = Pt(0), Pt(14)
+    head.paragraph_format.first_line_indent = None
+    for lvl, name in enumerate(TOC_LEVEL_STYLES, start=1):
+        st = _ensure_paragraph_style(document, name)
+        st.font.name, st.font.size = cfg["body_font"], Pt(cfg["body_size"])
+        st.font.bold = False
+        pf = st.paragraph_format
+        pf.left_indent = Inches(0.28 * (lvl - 1))
+        pf.first_line_indent = None
+        pf.space_before = Pt(6 if lvl == 1 else 0)
+        pf.space_after = Pt(2)
+        pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        pf.tab_stops.add_tab_stop(width, WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
+
+
+def _el(tag, **attrs):
+    e = OxmlElement(tag)
+    for k, v in attrs.items():
+        e.set(qn(k), v)
+    return e
+
+
+def _insert_toc(document, cfg, after_paragraphs):
+    """Insert a contents page as its own section, with linked entries and a live Word TOC field.
+
+    Each listed heading gets a bookmark; each entry links to it. Page numbers are left blank here
+    and filled in by fill_toc_page_numbers() from a real layout pass, so they are correct in PDF
+    exports and LibreOffice as well as in Word (which can still refresh the field after edits).
     """
     body = document.element.body
     anchor = body[after_paragraphs] if after_paragraphs < len(body) else None
-    headings = [(heading_level(p), p.text.strip()) for p, t in iter_all_paragraphs(document)
+    headings = [p for p, t in iter_all_paragraphs(document)
                 if t is None and classify_paragraph(p) == "heading" and (heading_level(p) or 9) <= 3]
+    _setup_toc_styles(document, cfg)
 
     def add(p):
         if anchor is not None:
             anchor.addprevious(p._p)
         return p
 
-    def fld(tag, **attrs):
-        e = OxmlElement(tag)
-        for k, v in attrs.items():
-            e.set(qn(k), v)
-        return e
+    for i, hp in enumerate(headings):
+        name = f"{BOOKMARK_PREFIX}{i:04d}"
+        start, end = _el("w:bookmarkStart", **{"w:id": str(90000 + i), "w:name": name}), _el("w:bookmarkEnd", **{"w:id": str(90000 + i)})
+        ppr = hp._p.find(qn("w:pPr"))
+        (ppr.addnext(start) if ppr is not None else hp._p.insert(0, start))
+        hp._p.append(end)
 
     head = add(document.add_paragraph("Contents"))
-    head.style = document.styles["Heading 1"]
-    entries = headings or [(1, "Update this table to list the document headings.")]
-    paras = []
-    for i, (lvl, text) in enumerate(entries):
+    head.style = document.styles[TOC_HEADING_STYLE]
+    entries = []
+    for i, hp in enumerate(headings):
+        lvl = min(3, max(1, heading_level(hp) or 1))
         p = add(document.add_paragraph())
-        p.paragraph_format.left_indent = Inches(0.3 * ((lvl or 1) - 1))
-        p.paragraph_format.space_after = Pt(2)
+        p.style = document.styles[TOC_LEVEL_STYLES[lvl - 1]]
         if i == 0:
-            p.add_run()._r.append(fld("w:fldChar", **{"w:fldCharType": "begin", "w:dirty": "true"}))
-            it = fld("w:instrText", **{"xml:space": "preserve"})
+            p.add_run()._r.append(_el("w:fldChar", **{"w:fldCharType": "begin", "w:dirty": "true"}))
+            it = _el("w:instrText", **{"xml:space": "preserve"})
             it.text = ' TOC \\o "1-3" \\h \\z \\u '
             p.add_run()._r.append(it)
-            p.add_run()._r.append(fld("w:fldChar", **{"w:fldCharType": "separate"}))
-        p.add_run(text)
-        paras.append(p)
-    paras[-1].add_run()._r.append(fld("w:fldChar", **{"w:fldCharType": "end"}))
-    brk = add(document.add_paragraph())
-    brk.add_run().add_break(WD_BREAK.PAGE)
+            p.add_run()._r.append(_el("w:fldChar", **{"w:fldCharType": "separate"}))
+        link = _el("w:hyperlink", **{"w:anchor": f"{BOOKMARK_PREFIX}{i:04d}", "w:history": "1"})
+        r = p.add_run(" ".join(hp.text.split()))
+        link.append(r._r)
+        p._p.append(link)
+        p.add_run("\t")
+        p.add_run("")  # page number, filled in by fill_toc_page_numbers()
+        entries.append(p)
+    if entries:
+        entries[-1].add_run()._r.append(_el("w:fldChar", **{"w:fldCharType": "end"}))
+    else:
+        p = add(document.add_paragraph("No headings were found. Apply Heading 1 to 3 styles in Word to list sections here."))
+        p.style = document.styles[TOC_LEVEL_STYLES[0]]
+        entries.append(p)
+
+    # End the contents page with its own section: roman numerals, and the body restarts at 1.
+    body_sectpr = body.find(qn("w:sectPr"))
+    toc_sectpr = copy.deepcopy(body_sectpr) if body_sectpr is not None else OxmlElement("w:sectPr")
+    for tag in ("w:headerReference", "w:footerReference", "w:titlePg", "w:pgNumType", "w:vAlign", "w:type"):
+        for el in toc_sectpr.findall(qn(tag)):
+            toc_sectpr.remove(el)
+    toc_sectpr.append(_el("w:pgNumType", **{"w:fmt": "lowerRoman", "w:start": "1"}))
+    entries[-1]._p.get_or_add_pPr().append(toc_sectpr)
+    _restart_body_numbering(document)
+
     settings_el = document.settings.element
     if settings_el.find(qn("w:updateFields")) is None:
         uf = OxmlElement("w:updateFields")
         uf.set(qn("w:val"), "true")
         settings_el.append(uf)
+    return len(headings)
+
+
+def _restart_body_numbering(document):
+    body_sectpr = document.element.body.find(qn("w:sectPr"))
+    if body_sectpr is None:
+        return
+    for el in body_sectpr.findall(qn("w:pgNumType")):
+        body_sectpr.remove(el)
+    body_sectpr.append(_el("w:pgNumType", **{"w:start": "1"}))
+
+
+def fill_toc_page_numbers(path):
+    """Write real page numbers into the contents page by laying the document out once.
+
+    A throwaway copy gets tiny invisible markers at each listed heading and at the start of the body;
+    LibreOffice turns it into a PDF and the markers' pages give exact body page numbers.
+    Returns True when numbers were filled in, False if LibreOffice is unavailable.
+    """
+    import tempfile
+    from .conversion_service import docx_to_pdf, find_soffice
+    if not find_soffice():
+        return False
+    import pymupdf
+
+    document = docx.Document(str(path))
+    entries = [p for p in document.paragraphs if p.style is not None and p.style.name in TOC_LEVEL_STYLES]
+    if not entries or not any(p._p.find(qn("w:hyperlink")) is not None for p in entries):
+        return False
+
+    with tempfile.TemporaryDirectory(prefix="docucraft_toc_") as tmp:
+        probe = docx.Document(str(path))
+        body = probe.element.body
+
+        def mark(par_el, label):
+            r = _el("w:r")
+            rpr = _el("w:rPr")
+            rpr.append(_el("w:sz", **{"w:val": "2"}))
+            r.append(rpr)
+            t = _el("w:t")
+            t.text = label
+            r.append(t)
+            ppr = par_el.find(qn("w:pPr"))
+            (ppr.addnext(r) if ppr is not None else par_el.insert(0, r))
+
+        for bm in body.iter(qn("w:bookmarkStart")):
+            name = bm.get(qn("w:name")) or ""
+            if name.startswith(BOOKMARK_PREFIX):
+                par = bm.getparent()
+                while par is not None and par.tag != qn("w:p"):
+                    par = par.getparent()
+                if par is not None:
+                    mark(par, f"QQ{name[len(BOOKMARK_PREFIX):]}QQ")
+        # The body starts at the first paragraph after the contents section break.
+        toc_end = None
+        for p in probe.paragraphs:
+            if p.style is not None and p.style.name in TOC_LEVEL_STYLES and p._p.find(qn("w:pPr")) is not None \
+                    and p._p.find(qn("w:pPr")).find(qn("w:sectPr")) is not None:
+                toc_end = p._p
+        if toc_end is None:
+            return False
+        nxt = toc_end.getnext()
+        while nxt is not None and nxt.tag != qn("w:p"):
+            inner = next(nxt.iter(qn("w:p")), None) if nxt.tag == qn("w:tbl") else None
+            if inner is not None:
+                nxt = inner
+                break
+            nxt = nxt.getnext()
+        if nxt is None:
+            return False
+        mark(nxt, "QQBODYQQ")
+        src, pdf = Path(tmp) / "probe.docx", Path(tmp) / "probe.pdf"
+        probe.save(str(src))
+        docx_to_pdf(src, pdf, timeout=180)
+        pages = {}
+        with pymupdf.open(str(pdf)) as d:
+            for i, page in enumerate(d):
+                text = page.get_text().replace(" ", "").replace("\n", "")
+                for token in __import__("re").findall(r"QQ(BODY|\d{4})QQ", text):
+                    pages.setdefault(token, i)
+    if "BODY" not in pages:
+        return False
+    for p in entries:
+        link = p._p.find(qn("w:hyperlink"))
+        if link is None:
+            continue
+        key = (link.get(qn("w:anchor")) or "")[len(BOOKMARK_PREFIX):]
+        if key in pages:
+            # The number goes in the last plain run; on the final entry the run after it closes the field.
+            slots = [r for r in p.runs if not r._r.findall(qn("w:fldChar")) and not r._r.findall(qn("w:instrText"))]
+            if slots:
+                slots[-1].text = str(pages[key] - pages["BODY"] + 1)
+    document.save(str(path))
+    return True
 
 
 def _header_footer(document, cfg):
@@ -404,6 +602,7 @@ def _header_footer(document, cfg):
         s.header.is_linked_to_previous = False
         s.footer.is_linked_to_previous = False
     hdr, ftr = body_section.header, body_section.footer
+    has_front = len(document.sections) > 1
     if cfg.get("header_text"):
         p = hdr.paragraphs[0] if hdr.paragraphs else hdr.add_paragraph()
         p.text = cfg["header_text"]
@@ -421,6 +620,9 @@ def _header_footer(document, cfg):
             r.font.size = Pt(9)
         if cfg.get("page_numbers"):
             pattern = cfg.get("page_number_style") or "{PAGE}"
+            if has_front:
+                # Front matter is numbered separately, so "of N" must count body pages only.
+                pattern = pattern.replace("{NUMPAGES}", "{SECTIONPAGES}")
             for i, chunk in enumerate(pattern.replace("{SECTIONPAGES}", "\x00SECTIONPAGES\x00").replace("{NUMPAGES}", "\x00NUMPAGES\x00").replace("{PAGE}", "\x00PAGE\x00").split("\x00")):
                 if chunk in ("PAGE", "NUMPAGES", "SECTIONPAGES"):
                     _add_field(p, chunk)
@@ -437,21 +639,47 @@ def _header_footer(document, cfg):
                     r._element.getparent().remove(r._element)
 
 
-def _style_tables(document):
-    """Give unstyled tables clean grid borders and a bold header row."""
+def _style_tables(document, cfg=None):
+    """Clean grid tables: shaded, bold, repeating header row; padded cells; space after the table."""
     try:
         grid = document.styles["Table Grid"]
     except KeyError:
         grid = None
+    fill = ((cfg or {}).get("table_header_fill") or "E8ECF2").lstrip("#")
     for table in document.tables:
         sname = (table.style.name if table.style is not None else "") or ""
         if grid is not None and sname in ("", "Normal Table"):
             table.style = grid
-        if table.rows:
-            for cell in table.rows[0].cells:
+        tblpr = table._tbl.tblPr
+        if tblpr.find(qn("w:tblCellMar")) is None:
+            mar = _el("w:tblCellMar")
+            for side, w in (("top", "40"), ("left", "100"), ("bottom", "40"), ("right", "100")):
+                mar.append(_el(f"w:{side}", **{"w:w": w, "w:type": "dxa"}))
+            tblpr.append(mar)
+        if not table.rows:
+            continue
+        header = table.rows[0]
+        trpr = header._tr.get_or_add_trPr()
+        if trpr.find(qn("w:tblHeader")) is None:
+            trpr.append(_el("w:tblHeader"))
+        for cell in header.cells:
+            tcpr = cell._tc.get_or_add_tcPr()
+            if tcpr.find(qn("w:shd")) is None:
+                tcpr.append(_el("w:shd", **{"w:val": "clear", "w:color": "auto", "w:fill": fill}))
+            for p in cell.paragraphs:
+                for r in p.runs:
+                    r.font.bold = True
+        for row in table.rows:
+            for cell in row.cells:
                 for p in cell.paragraphs:
-                    for r in p.runs:
-                        r.font.bold = True
+                    p.paragraph_format.space_after = Pt(0)
+                    p.paragraph_format.first_line_indent = None
+        nxt = table._tbl.getnext()
+        if nxt is not None and nxt.tag == qn("w:p"):
+            from docx.text.paragraph import Paragraph
+            para = Paragraph(nxt, table._parent)
+            if not para.paragraph_format.space_before or para.paragraph_format.space_before < Pt(8):
+                para.paragraph_format.space_before = Pt(10)
 
 
 def heading_outline(path):
@@ -469,10 +697,11 @@ def apply_template(src_path, dst_path, config=None, metadata=None, scope_ids=Non
     cfg = merged_config(config)
     meta = metadata or {}
     document = docx.Document(str(src_path))
+    _remove_generated_front_matter(document)
     _setup_styles(document, cfg)
     _format_body(document, cfg, scope_ids=scope_ids)
     if cfg.get("table_borders"):
-        _style_tables(document)
+        _style_tables(document, cfg)
     cover_on = cfg["cover"].get("enabled") if include_cover is None else include_cover
     toc_on = cfg.get("toc") if include_toc is None else include_toc
     cover_len = 0
@@ -482,9 +711,24 @@ def apply_template(src_path, dst_path, config=None, metadata=None, scope_ids=Non
         _insert_toc(document, cfg, cover_len)
     _setup_pages(document, cfg)
     _header_footer(document, cfg)
+    if toc_on and cfg.get("page_numbers"):
+        toc_section = document.sections[-2]
+        p = toc_section.footer.paragraphs[0] if toc_section.footer.paragraphs else toc_section.footer.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _add_field(p, "PAGE", "i")
+        for r in p.runs:
+            r.font.size, r.font.name = Pt(9), cfg["body_font"]
+    if cover_on and not toc_on:
+        _restart_body_numbering(document)
     if meta.get("title"):
         document.core_properties.title = meta["title"][:250]
     if meta.get("author"):
         document.core_properties.author = meta["author"][:250]
     document.save(str(dst_path))
-    return {"cover": bool(cover_on), "toc": bool(toc_on), "scoped": scope_ids is not None}
+    numbered = False
+    if toc_on:
+        try:
+            numbered = fill_toc_page_numbers(dst_path)
+        except Exception:
+            log.warning("Could not compute contents page numbers; Word will fill them in on open", exc_info=True)
+    return {"cover": bool(cover_on), "toc": bool(toc_on), "toc_page_numbers": numbered, "scoped": scope_ids is not None}

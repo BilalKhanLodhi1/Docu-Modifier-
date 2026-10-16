@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Edit image {{ index|add:1 }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="crumb"><a href="{{ doc.get_absolute_url }}">{{ doc.original_filename }}</a>, <a href="{% url 'image_tools:gallery' doc.pk %}">images</a></div><h1>Image {{ index|add:1 }}</h1><p>{% if img.caption %}{{ img.caption }}{% else %}No caption{% endif %}{% if img.context %}. Near “{{ img.context|truncatechars:80 }}”{% endif %}</p></div>
+</div>
+
+{% if technical %}<div class="notice notice--info"><p>This looks like a diagram, chart or screenshot. Keep edits to cropping, sharpening and contrast so labels and values stay accurate.</p></div>{% endif %}
+
+<form method="post" action="{% url 'image_tools:apply' doc.pk index %}" enctype="multipart/form-data" data-image-editor data-preview-url="{% url 'image_tools:preview' doc.pk index %}" data-ai-url="{% url 'image_tools:ai_edit' doc.pk index %}">
+  {% csrf_token %}
+  <input type="hidden" name="ops" value="{}">
+  <input type="hidden" name="location" value="{{ img.context|truncatechars:190 }}">
+  <div class="editor">
+    <div>
+      <div class="canvas" data-canvas>
+        <img data-preview src="{% url 'image_tools:raw' doc.pk index %}" alt="Preview of the edited image">
+        <div class="crop-box" data-crop-box></div>
+      </div>
+      <div class="compare">
+        <span>Original: {{ img.format }}, {{ img.width }} × {{ img.height }} px, {{ img.size_bytes|filesizeformat }}</span>
+        <span data-result>Edited: no changes yet</span>
+      </div>
+      <div class="notice notice--warning" data-warnings hidden></div>
+    </div>
+
+    <div class="sheet controls">
+      <details open><summary>Crop and rotate</summary>
+        <div class="ctrl"><label for="c-x">Trim left</label><input id="c-x" type="range" min="0" max="45" value="0" data-op="crop.x"><output>0%</output></div>
+        <div class="ctrl"><label for="c-r">Trim right</label><input id="c-r" type="range" min="0" max="45" value="0" data-op="crop.r"><output>0%</output></div>
+        <div class="ctrl"><label for="c-y">Trim top</label><input id="c-y" type="range" min="0" max="45" value="0" data-op="crop.y"><output>0%</output></div>
+        <div class="ctrl"><label for="c-b">Trim bottom</label><input id="c-b" type="range" min="0" max="45" value="0" data-op="crop.b"><output>0%</output></div>
+        <div class="row2">
+          <button class="btn btn-sm" type="button" data-rotate>Rotate 90°</button>
+          <label class="check"><input type="checkbox" data-op="flip_h"> Mirror</label>
+        </div>
+      </details>
+      <details open><summary>Adjust</summary>
+        <div class="ctrl"><label for="a-b">Brightness</label><input id="a-b" type="range" min="0.5" max="1.6" step="0.05" value="1" data-op="brightness"><output>1.00</output></div>
+        <div class="ctrl"><label for="a-c">Contrast</label><input id="a-c" type="range" min="0.5" max="1.8" step="0.05" value="1" data-op="contrast"><output>1.00</output></div>
+        <div class="ctrl"><label for="a-s">Sharpness</label><input id="a-s" type="range" min="0.5" max="2.5" step="0.1" value="1" data-op="sharpness"><output>1.0</output></div>
+        <div class="ctrl"><label for="a-n">Noise removal</label><input id="a-n" type="range" min="0" max="15" step="1" value="0" data-op="denoise"><output>0</output></div>
+        <div class="row2">
+          <label class="check"><input type="checkbox" data-op="auto_contrast"> Auto contrast</label>
+          <label class="check"><input type="checkbox" data-op="grayscale"> Grayscale</label>
+        </div>
+      </details>
+      <details><summary>Size and file</summary>
+        <div class="row2">
+          <div class="field"><label for="rw">Width in pixels</label><input id="rw" type="number" min="16" max="8000" placeholder="{{ img.width }}" data-op="resize_width"></div>
+          <div class="field"><label for="fmt">Format</label><select id="fmt" data-op="format"><option value="">Keep {{ img.format }}</option><option value="PNG">PNG</option><option value="JPEG">JPEG</option></select></div>
+        </div>
+        <label class="check" style="margin-top:0.6rem"><input type="checkbox" data-op="optimize"> Optimise file size</label>
+      </details>
+      <details><summary>Placement in the document</summary>
+        <div class="row2">
+          <div class="field"><label for="w-in">Width (inches)</label><input id="w-in" type="number" name="width_in" min="0.3" max="12" step="0.1" placeholder="{{ img.display_width_in|default:'' }}"></div>
+          <div class="field"><label for="align">Alignment</label><select id="align" name="alignment"><option value="">Unchanged</option><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select></div>
+        </div>
+        <div class="field" style="margin-top:0.6rem"><label for="cap">Caption</label><input id="cap" type="text" name="caption" value="{{ img.caption }}" maxlength="300"><span class="hint">Leave as is to keep it. Clear it to remove the caption.</span></div>
+      </details>
+      <details><summary>Replace with another image</summary>
+        <div class="field" style="margin-top:0.6rem"><label for="rep">New image</label><input id="rep" type="file" name="replacement" accept="image/*" data-replacement><span class="hint">The adjustments above apply to the new image too. Under 15 MB.</span></div>
+        <label class="check" style="margin-top:0.6rem"><input type="checkbox" name="confirm_replace" value="1"> Replace the original image with this one</label>
+      </details>
+      {% if ai_ok %}
+      <details><summary>AI image editing</summary>
+        <p class="small muted" style="margin-top:0.6rem">The image is sent to the configured image provider. Avoid this for charts and screenshots.</p>
+        <div class="field"><label for="ai-i">Instruction</label><input id="ai-i" type="text" maxlength="500" data-ai-instruction></div>
+        <label class="check" style="margin-top:0.6rem"><input type="checkbox" data-ai-approve> I approve sending this image to the AI provider</label>
+        <button class="btn btn-sm" type="button" style="margin-top:0.6rem" data-ai-run>Generate a suggestion</button>
+      </details>
+      {% endif %}
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Save as new version</button>
+        <button class="btn btn-quiet" type="button" data-reset>Reset</button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

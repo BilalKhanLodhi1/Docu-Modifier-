@@ -1,0 +1,1 @@
+{% load docucraft %}<li><span class="grow"><a href="{{ job.get_absolute_url }}">{{ job.get_operation_display }}</a><span class="muted small">{{ job.document.original_filename }}, {{ job.created_at|timesince }} ago</span></span><span class="badge badge--{{ job.status|tone }}">{{ job.get_status_display }}</span></li>

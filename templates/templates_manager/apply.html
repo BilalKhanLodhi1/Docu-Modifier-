@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}Apply a template{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="crumb"><a href="{{ doc.get_absolute_url }}">{{ doc.original_filename }}</a></div><h1>Apply a template</h1><p>Formats version {{ current.version_number }} and saves the result as a new version. Text, images, tables and code keep their content.</p></div></div>
+<form class="sheet" method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+  {% include "partials/form_errors.html" %}
+  <fieldset><legend>Template</legend><div class="form-grid">
+    {% field form.template wide=True hint="Manage templates on the Templates page." %}
+    {% field form.include_cover %}{% field form.include_toc %}
+    {% field form.page_numbers %}
+  </div></fieldset>
+  {% if has_sections %}
+  <fieldset><legend>Scope</legend><div class="form-grid">
+    {% field form.scope wide=True %}
+    <div class="wide" data-show-when-scope="selected">{% field form.sections %}</div>
+  </div></fieldset>
+  {% endif %}
+  <fieldset><legend>Cover page</legend>
+    <p class="muted small">Leave anything blank to omit it. Defaults come from your Settings.</p>
+    <div class="form-grid">
+      {% field form.title wide=True mark_optional=False %}{% field form.subtitle wide=True mark_optional=False %}
+      {% field form.organization mark_optional=False %}{% field form.department mark_optional=False %}
+      {% field form.program mark_optional=False %}{% field form.course mark_optional=False %}
+      {% field form.report_number mark_optional=False %}{% field form.date mark_optional=False %}
+      {% field form.author mark_optional=False %}{% field form.author_id mark_optional=False %}
+      {% field form.submitted_to wide=True mark_optional=False %}
+      {% field form.logo wide=True mark_optional=False %}
+    </div>
+  </fieldset>
+  <div class="form-actions"><button class="btn btn-primary" type="submit">Apply template</button><a class="btn btn-quiet" href="{{ doc.get_absolute_url }}">Cancel</a></div>
+</form>
+{% endblock %}

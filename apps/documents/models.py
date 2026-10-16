@@ -20,6 +20,20 @@ def processed_upload_to(instance, filename):
     return _storage_path(instance, filename, "processed")
 
 
+class DocumentQuerySet(models.QuerySet):
+    def with_current_type(self):
+        """Annotate `current_type` (docx/pdf of the working version) in one query."""
+        from django.db.models import OuterRef, Subquery
+        from django.db.models.functions import Coalesce
+        versions = DocumentVersion.objects.filter(document=OuterRef("pk"))
+        current = versions.filter(is_current=True).order_by("-version_number").values("file_type")[:1]
+        latest = versions.order_by("-version_number").values("file_type")[:1]
+        return self.annotate(current_type=Coalesce(Subquery(current), Subquery(latest)))
+
+    def word_documents(self):
+        return self.with_current_type().filter(current_type="docx")
+
+
 class Document(models.Model):
     TYPE_CHOICES = [("docx", "Word"), ("pdf", "PDF")]
     STATUS_CHOICES = [("uploaded", "Uploaded"), ("processing", "Processing"), ("ready", "Ready"), ("failed", "Failed")]
@@ -37,6 +51,8 @@ class Document(models.Model):
     error_message = models.TextField(blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = DocumentQuerySet.as_manager()
 
     class Meta:
         ordering = ["-uploaded_at"]
@@ -140,6 +156,8 @@ class ProcessingJob(models.Model):
     error = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
+    # Updated on every progress report; the stale-job watchdog measures silence from here.
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

@@ -97,9 +97,9 @@ class TemplateForm(forms.ModelForm):
 class FormatForm(forms.Form):
     """Per-run choices when applying a template to one document."""
     template = forms.ModelChoiceField(queryset=DocumentTemplate.objects.none(), empty_label=None)
-    include_cover = forms.BooleanField(required=False, initial=True)
-    include_toc = forms.BooleanField(required=False)
-    page_numbers = forms.BooleanField(required=False, initial=True)
+    include_cover = forms.BooleanField(required=False, initial=True, label="Include a cover page")
+    include_toc = forms.BooleanField(required=False, label="Include a table of contents")
+    page_numbers = forms.BooleanField(required=False, initial=True, label="Add page numbers")
     scope = forms.ChoiceField(choices=[("all", "Entire document"), ("selected", "Selected sections only")],
                               initial="all", widget=forms.RadioSelect)
     sections = forms.MultipleChoiceField(required=False, widget=forms.CheckboxSelectMultiple)

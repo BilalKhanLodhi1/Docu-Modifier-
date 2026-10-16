@@ -1,0 +1,45 @@
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}History{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>History</h1><p>Every upload, job and deletion on your account. Entries stay even after a document is deleted.</p></div></div>
+<section class="sheet flush">
+  <div class="sheet-head">
+    <form class="filters" method="get" role="search">
+      <label class="sr-only" for="q">Search by document name</label>
+      <input id="q" type="search" name="q" value="{{ q }}" placeholder="Search by document name">
+      <label class="sr-only" for="status">Status</label>
+      <select id="status" name="status" data-autosubmit>
+        <option value="">Any status</option>
+        <option value="completed"{% if status == "completed" %} selected{% endif %}>Completed</option>
+        <option value="failed"{% if status == "failed" %} selected{% endif %}>Failed</option>
+        <option value="queued"{% if status == "queued" %} selected{% endif %}>Queued</option>
+      </select>
+      <button class="btn btn-sm" type="submit">Search</button>
+      {% if q or status %}<a class="btn btn-quiet btn-sm" href="{% url 'history:index' %}">Clear</a>{% endif %}
+    </form>
+  </div>
+  {% if page.object_list %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>When</th><th>Action</th><th>Document</th><th>Result</th><th>Status</th></tr></thead>
+    <tbody>{% for h in page.object_list %}
+      <tr>
+        <td class="nowrap">{{ h.timestamp|date:"j M Y, H:i" }}</td>
+        <td>{% if h.job %}<a href="{{ h.job.get_absolute_url }}">{{ h.operation }}</a>{% else %}{{ h.operation }}{% endif %}</td>
+        <td class="doc-name">{% if h.document %}<a href="{{ h.document.get_absolute_url }}">{{ h.document_name }}</a>{% else %}{{ h.document_name }} <span class="muted small">(deleted)</span>{% endif %}</td>
+        <td class="small">{{ h.detail|truncatechars:90 }}{% if h.output_reference %}<span class="muted"> ({{ h.output_reference }})</span>{% endif %}</td>
+        <td><span class="badge badge--{{ h.status|tone }}">{{ h.status|capfirst }}</span></td>
+      </tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% if page.has_other_pages %}
+  <nav class="pager" aria-label="Pages" style="padding-bottom:1rem">
+    {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}&q={{ q|urlencode }}&status={{ status }}">Newer</a>{% endif %}
+    <span class="muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a href="?page={{ page.next_page_number }}&q={{ q|urlencode }}&status={{ status }}">Older</a>{% endif %}
+  </nav>
+  {% endif %}
+  {% else %}
+  <div class="empty"><p>{% if q or status %}Nothing matches that filter.{% else %}No activity yet.{% endif %}</p></div>
+  {% endif %}
+</section>
+{% endblock %}

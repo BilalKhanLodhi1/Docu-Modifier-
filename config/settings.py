@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
+    "apps.core",
     "apps.accounts",
     "apps.templates_manager",
     "apps.documents",
@@ -61,6 +62,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "apps.core.context_processors.navigation",
             ],
         },
     },
@@ -132,9 +134,11 @@ TESSERACT_PATH = os.getenv("TESSERACT_PATH", "")
 # AI providers
 AI_PROVIDER = os.getenv("AI_PROVIDER", "ollama")  # ollama | anthropic | openai | none
 AI_TIMEOUT = int(os.getenv("AI_TIMEOUT", "180"))
-AI_CHUNK_CHARS = int(os.getenv("AI_CHUNK_CHARS", "6000"))
+AI_CHUNK_CHARS = int(os.getenv("AI_CHUNK_CHARS", "3000"))
+# Longest a single AI request may run in total, even while still producing text.
+AI_MAX_CALL_SECONDS = int(os.getenv("AI_MAX_CALL_SECONDS", "900"))
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

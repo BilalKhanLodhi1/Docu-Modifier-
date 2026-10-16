@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Images{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Edit images</h1><p>Crop, straighten, sharpen or replace the images inside a Word document. The edited image goes back in the same place, and the result is saved as a new version.</p></div></div>
+<section class="sheet">
+  {% if documents %}
+  <ul class="rows">{% for d in documents %}<li><span class="grow"><a class="doc-name" href="{% url 'image_tools:gallery' d.pk %}">{{ d.original_filename }}</a><span class="muted small">{% if d.inspection.images %}{{ d.inspection.images }} image{{ d.inspection.images|pluralize }} in the original{% else %}No images found when uploaded{% endif %}</span></span><a class="btn btn-sm" href="{% url 'image_tools:gallery' d.pk %}">Open images</a></li>{% endfor %}</ul>
+  {% else %}
+  <div class="empty"><p>You have no Word documents. Image editing works on .docx files; convert a PDF to Word first.</p><a class="btn" href="{% url 'documents:workspace' %}">Go to documents</a></div>
+  {% endif %}
+</section>
+{% endblock %}

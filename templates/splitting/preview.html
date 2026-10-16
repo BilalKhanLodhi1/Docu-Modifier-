@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Check the parts{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="crumb"><a href="{{ doc.get_absolute_url }}">{{ doc.original_filename }}</a></div><h1>Check the parts</h1><p>{{ parts|length }} part{{ parts|pluralize }} from version {{ version.version_number }}. Untick any you don't need and rename the rest.</p></div></div>
+{% if warning %}<div class="notice notice--info"><p>{{ warning }}</p></div>{% endif %}
+<form class="sheet flush" method="post">
+  {% csrf_token %}
+  <div class="table-wrap"><table class="table parts">
+    <thead><tr><th><span class="sr-only">Include</span></th><th>Part</th><th>{% if version.file_type == "pdf" %}Pages{% else %}Paragraphs{% endif %}</th><th>File name</th></tr></thead>
+    <tbody>{% for p in parts %}
+      <tr>
+        <td><input type="checkbox" name="include_{{ forloop.counter0 }}" value="1"{% if not custom %} checked{% endif %} aria-label="Include {{ p.label }}"></td>
+        <td>{{ p.label }}</td>
+        <td class="nowrap muted">{% if version.file_type == "pdf" %}{{ p.start }}–{{ p.end }}{% else %}{{ p.start|add:1 }}–{{ p.end }}{% endif %}</td>
+        <td class="part-name"><label class="sr-only" for="name_{{ forloop.counter0 }}">File name for {{ p.label }}</label><input id="name_{{ forloop.counter0 }}" type="text" name="name_{{ forloop.counter0 }}" maxlength="80" placeholder="{{ doc.stem|truncatechars:30 }}_part{{ forloop.counter }}"></td>
+      </tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <div class="review-bar">
+    {% if version.file_type == "docx" %}<label class="check"><input type="checkbox" name="combine" value="1"> Combine the selected parts into one file instead of separate files</label>{% else %}<span class="muted small">A ZIP of all parts is included when there is more than one.</span>{% endif %}
+    <div class="btn-row"><a class="btn btn-quiet" href="{% url 'splitting:index' %}?document={{ doc.pk }}">Change method</a><button class="btn btn-primary" type="submit">Create files</button></div>
+  </div>
+</form>
+{% endblock %}

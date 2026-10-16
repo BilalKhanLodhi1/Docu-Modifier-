@@ -16,7 +16,7 @@ class ConvertForm(UploadForm):
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["document"].queryset = Document.objects.filter(owner=user)
+        self.fields["document"].queryset = Document.objects.filter(owner=user).with_current_type()
 
     def clean_file(self):
         if not self.cleaned_data.get("file"):

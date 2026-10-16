@@ -15,7 +15,7 @@ from .forms import DOCX_METHODS, PDF_METHODS, SplitForm
 @login_required
 def index(request):
     initial = {"document": request.GET.get("document")} if request.GET.get("document") else {}
-    form = SplitForm(request.POST or None, user=request.user, initial=initial)
+    form = SplitForm((request.POST if request.method == "POST" else None), user=request.user, initial=initial)
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         doc = d["document"]

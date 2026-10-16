@@ -1,29 +1,47 @@
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocuCraft Dashboard</title>
-</head>
-<body>
-    <h1>Welcome to DocuCraft</h1>
-    <p>Your document workspace is ready.</p>
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Overview</h1><p>Upload a document, then rewrite it, format it with a template, fix its images, split it or convert it. Every change is saved as a new version; your original is never modified.</p></div>
+</div>
 
-    <nav>
-        <ul>
-            <li><a href="/rewrite/">Rewrite Documents</a></li>
-            <li><a href="/images/">Image Tools</a></li>
-            <li><a href="/split/">Split Documents</a></li>
-            <li><a href="/convert/">Convert Documents</a></li>
-            <li><a href="/history/">Document History</a></li>
-        </ul>
-    </nav>
+<div class="figures">
+  <div><strong>{{ stats.total }}</strong><span>documents</span></div>
+  <div><strong>{{ stats.processed }}</strong><span>processed at least once</span></div>
+  <div><strong>{{ stats.running }}</strong><span>jobs running now</span></div>
+  <div{% if stats.failed %} class="is-bad"{% endif %}><strong>{{ stats.failed }}</strong><span>failed jobs</span></div>
+</div>
 
-    <form method="post" action="/accounts/logout/">
-        {% csrf_token %}
-        <button type="submit">Log Out</button>
-    </form>
-</body>
-</html>
-```
+<div class="cols-main">
+  <div>
+    <section class="sheet">
+      <div class="sheet-head"><h2>Add a document</h2></div>
+      {% include "partials/upload.html" %}
+    </section>
+    <section class="sheet">
+      <div class="sheet-head"><h2>Recent documents</h2>{% if recent_docs %}<a href="{% url 'documents:workspace' %}">All documents</a>{% endif %}</div>
+      {% if recent_docs %}
+      <ul class="rows">{% for d in recent_docs %}
+        <li><span class="filetype">{{ d.file_type|upper }}</span><span class="grow"><a class="doc-name" href="{{ d.get_absolute_url }}">{{ d.original_filename }}</a><span class="muted small">Uploaded {{ d.uploaded_at|timesince }} ago{% if d.page_count %}, {{ d.page_count }} page{{ d.page_count|pluralize }}{% endif %}</span></span><span class="badge badge--{{ d.status|tone }}">{{ d.get_status_display }}</span></li>
+      {% endfor %}</ul>
+      {% else %}<div class="empty"><p>No documents yet. Upload a .docx or .pdf above to begin.</p></div>{% endif %}
+    </section>
+  </div>
+  <aside>
+    <section class="sheet">
+      <h2>Latest results</h2>
+      {% if results %}
+      <ul class="rows">
+        {% for r in results %}<li><span class="grow"><a href="{{ r.doc_url }}">{{ r.title }}</a><span class="muted small">{{ r.detail }}, {{ r.when|timesince }} ago</span></span><a class="btn btn-sm" href="{{ r.url }}">Download</a></li>{% endfor %}
+      </ul>
+      {% else %}<p class="muted">Processed files will appear here.</p>{% endif %}
+    </section>
+    <section class="sheet">
+      <div class="sheet-head"><h2>Activity</h2>{% if activity %}<a href="{% url 'history:index' %}">History</a>{% endif %}</div>
+      {% if activity %}
+      <ul class="rows">{% for h in activity %}<li><span class="grow"><span>{{ h.operation }}</span><span class="muted small">{{ h.document_name }}, {{ h.timestamp|timesince }} ago</span></span><span class="badge badge--{{ h.status|tone }}">{{ h.status|capfirst }}</span></li>{% endfor %}</ul>
+      {% else %}<p class="muted">Nothing yet.</p>{% endif %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

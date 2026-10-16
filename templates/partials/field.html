@@ -1,0 +1,13 @@
+<div class="field{% if f.errors %} has-error{% endif %}{% if wide %} wide{% endif %}">
+  {% if is_check %}
+    <label class="check">{{ f }} <span>{{ f.label }}</span></label>
+  {% elif is_choice_list %}
+    <span class="label" id="{{ f.auto_id }}_label">{{ f.label }}</span>
+    <div class="choices" role="group" aria-labelledby="{{ f.auto_id }}_label">{{ f }}</div>
+  {% else %}
+    <label for="{{ f.id_for_label }}">{{ f.label }}{% if not f.field.required and mark_optional %} <span class="muted small">(optional)</span>{% endif %}</label>
+    {{ f }}
+  {% endif %}
+  {% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
+  {% if f.errors %}<ul class="errors">{% for e in f.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+</div>

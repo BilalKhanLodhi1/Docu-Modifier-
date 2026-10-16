@@ -1,0 +1,63 @@
+{% extends "base.html" %}{% load docucraft %}
+{% block title %}{{ job.get_operation_display }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="crumb"><a href="{{ job.document.get_absolute_url }}">{{ job.document.original_filename }}</a></div>
+    <h1>{{ job.get_operation_display }}</h1>
+    <p>Started {{ job.created_at|date:"j M Y, H:i" }}.{% if job.source_version %} Working from version {{ job.source_version.version_number }}.{% endif %}</p>
+  </div>
+</div>
+
+<section class="sheet job is-{{ job.status }}" data-job="{% url 'documents:job_status' job.pk %}" data-status="{{ job.status }}">
+  <div class="sheet-head"><h2 data-job-title>{% if job.status == "completed" %}Finished{% elif job.status == "failed" %}This job did not finish{% else %}Working on it{% endif %}</h2><span class="badge badge--{{ job.status|tone }}" data-job-badge>{{ job.get_status_display }}</span></div>
+  <div class="meter" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ job.progress }}"><span style="width: {{ job.progress }}%"></span></div>
+  <ol class="stages">
+    {% for key, label in stages %}<li data-stage="{{ key }}">{{ label }}</li>{% endfor %}
+  </ol>
+  <p class="job-message" data-job-message aria-live="polite">{% if job.status == "failed" %}{{ job.error }}{% else %}{{ job.message }}{% endif %}</p>
+  {% if job.is_active %}<p class="muted small">You can leave this page. The job keeps running and appears in History.</p>{% endif %}
+</section>
+
+{% if job.status == "failed" %}
+<section class="sheet job">
+  <h2>What now</h2>
+  <p>Your document and all earlier versions are unchanged. Fix the cause above if there is one, then try again.</p>
+  <div class="btn-row">
+    <form method="post" action="{% url 'documents:job_retry' job.pk %}">{% csrf_token %}<button class="btn btn-primary" type="submit">Try again</button></form>
+    <a class="btn" href="{{ job.document.get_absolute_url }}">Back to document</a>
+  </div>
+</section>
+{% endif %}
+
+{% if job.status == "completed" %}
+<section class="sheet job">
+  <h2>Results</h2>
+  {% with warnings=job.result.warnings %}{% if warnings %}<div class="notice notice--warning"><p>Check these before you use the result:</p><ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}{% endwith %}
+
+  {% if job.operation == "rewrite" %}
+    {% with s=job.result.stats %}
+    <p>{{ s.changed }} section{{ s.changed|pluralize }} rewritten, {{ s.unchanged }} already fine, {{ s.preserved }} kept as-is (code, links, images, equations){% if s.reverted %}, and {{ s.reverted }} reverted because the rewrite lost a fact{% endif %}.</p>
+    {% endwith %}
+    <p class="muted small">Nothing has been saved to your document yet. Review the changes and accept the ones you want.</p>
+    <div class="btn-row"><a class="btn btn-primary" href="{% url 'rewriting:review' job.pk %}">Review changes</a></div>
+  {% elif job.operation == "pipeline" and job.result.comparison %}
+    <div class="btn-row" style="margin-bottom:1rem"><a class="btn" href="{% url 'rewriting:review' job.pk %}">See what the rewrite changed</a></div>
+  {% endif %}
+
+  {% if job.output_version %}
+  <ul class="rows" style="margin-top:1rem">
+    <li><span class="grow"><strong>Version {{ job.output_version.version_number }}</strong><span class="muted small">{{ job.output_version.summary }}</span></span><a class="btn btn-sm btn-primary" href="{% url 'documents:download_version' job.output_version.pk %}">Download</a></li>
+  </ul>
+  {% endif %}
+
+  {% with outs=job.outputs.all %}{% if outs %}
+  <ul class="rows" style="margin-top:1rem">
+    {% for o in outs %}<li><span class="grow"><span>{{ o.filename }}</span><span class="muted small">{{ o.label }}, {{ o.size|filesizeformat }}</span></span>{% if o.file_type == "pdf" %}<a class="btn btn-quiet btn-sm" href="{% url 'documents:download_output' o.pk %}?inline=1" target="_blank" rel="noopener">Open</a>{% endif %}<a class="btn btn-sm" href="{% url 'documents:download_output' o.pk %}">Download</a></li>{% endfor %}
+  </ul>
+  {% endif %}{% endwith %}
+
+  <div class="btn-row" style="margin-top:1.25rem"><a class="btn" href="{{ job.document.get_absolute_url }}">Back to document</a></div>
+</section>
+{% endif %}
+{% endblock %}

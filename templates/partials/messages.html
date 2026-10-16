@@ -1,0 +1,1 @@
+{% if messages %}<div class="notices" role="status">{% for m in messages %}<div class="notice notice--{{ m.tags|default:'info' }}"><p>{{ m }}</p></div>{% endfor %}</div>{% endif %}

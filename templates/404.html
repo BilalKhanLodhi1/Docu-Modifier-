@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Not found{% endblock %}
+{% block body %}
+<main class="auth">
+  <div class="auth-sheet">
+    <a class="brand" href="/">{% include "partials/mark.html" %}<span class="brand-name">DocuCraft</span></a>
+    <div class="sheet">
+      <h1>This page or file isn't available</h1>
+      <p class="muted">It may have been deleted, the link may be mistyped, or it belongs to another account.</p>
+      <a class="btn btn-primary" href="/">Go to the overview</a>
+    </div>
+  </div>
+</main>
+{% endblock %}
